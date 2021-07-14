@@ -3,7 +3,15 @@ export enum HostClientType {
   web = 'web',
   android = 'android',
   ios = 'ios',
+  /**
+   * @deprecated Use teamsRoomsWindows instead.
+   */
   rigel = 'rigel',
+  surfaceHub = 'surfaceHub',
+  teamsRoomsWindows = 'teamsRoomsWindows',
+  teamsRoomsAndroid = 'teamsRoomsAndroid',
+  teamsPhones = 'teamsPhones',
+  teamsDisplays = 'teamsDisplays',
 }
 
 // Ensure these declarations stay in sync with the framework.
@@ -15,6 +23,7 @@ export enum FrameContexts {
   task = 'task',
   sidePanel = 'sidePanel',
   stage = 'stage',
+  meetingStage = 'meetingStage',
 }
 
 /**
@@ -53,4 +62,5 @@ export enum TaskModuleDimension {
 export enum ChannelType {
   Regular = 'Regular',
   Private = 'Private',
+  Shared = 'Shared',
 }

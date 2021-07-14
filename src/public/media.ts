@@ -1,6 +1,6 @@
 import { GlobalVars } from '../internal/globalVars';
 import { SdkError, ErrorCode } from './interfaces';
-import { ensureInitialized, sendMessageRequestToParent, isAPISupportedByPlatform } from '../internal/internalAPIs';
+import { ensureInitialized, isAPISupportedByPlatform } from '../internal/internalAPIs';
 import { FrameContexts, HostClientType } from './constants';
 import { generateGUID } from '../internal/utils';
 import {
@@ -10,29 +10,19 @@ import {
   validateGetMediaInputs,
   validateViewImagesInput,
   validateScanBarCodeInput,
+  isMediaCallForVideoAndImageInputs,
 } from '../internal/mediaUtil';
+import { sendMessageToParent } from '../internal/communication';
+import { registerHandler, removeHandler } from '../internal/handlers';
+import {
+  captureImageMobileSupportVersion,
+  mediaAPISupportVersion,
+  getMediaCallbackSupportVersion,
+  scanBarCodeAPIMobileSupportVersion,
+  videoAndImageMediaAPISupportVersion,
+} from '../internal/constants';
 
 export namespace media {
-  /**
-   * This is the SDK version when captureImage API is supported on mobile.
-   */
-  const captureImageMobileSupportVersion = '1.7.0';
-
-  /**
-   * This is the SDK version when media APIs is supported on all three platforms ios, android and web.
-   */
-  const mediaAPISupportVersion = '1.8.0';
-
-  /**
-   * This is the SDK version when getMedia API is supported via Callbacks on all three platforms ios, android and web.
-   */
-  const getMediaCallbackSupportVersion = '2.0.0';
-
-  /**
-   * This is the SDK version when scanBarCode API is supported on mobile.
-   */
-  const scanBarCodeAPIMobileSupportVersion = '1.9.0';
-
   /**
    * Enum for file formats supported
    */
@@ -101,8 +91,7 @@ export namespace media {
       return;
     }
 
-    const messageId = sendMessageRequestToParent('captureImage');
-    GlobalVars.callbacks[messageId] = callback;
+    sendMessageToParent('captureImage', callback);
   }
 
   /**
@@ -160,7 +149,6 @@ export namespace media {
         assembleAttachment: [],
       };
       const localUriId = [this.content];
-      const messageId = sendMessageRequestToParent('getMedia', localUriId);
       function handleGetMediaCallbackRequest(mediaResult: MediaResult): void {
         if (callback) {
           if (mediaResult && mediaResult.error) {
@@ -183,7 +171,7 @@ export namespace media {
           }
         }
       }
-      GlobalVars.callbacks[messageId] = handleGetMediaCallbackRequest;
+      sendMessageToParent('getMedia', localUriId, handleGetMediaCallbackRequest);
     }
 
     private getMediaViaHandler(callback: (error: SdkError, blob: Blob) => void): void {
@@ -193,13 +181,13 @@ export namespace media {
         assembleAttachment: [],
       };
       const params = [actionName, this.content];
-      this.content && callback && sendMessageRequestToParent('getMedia', params);
+      this.content && callback && sendMessageToParent('getMedia', params);
       function handleGetMediaRequest(response: string): void {
         if (callback) {
           const mediaResult: MediaResult = JSON.parse(response);
           if (mediaResult.error) {
             callback(mediaResult.error, null);
-            delete GlobalVars.handlers['getMedia' + actionName];
+            removeHandler('getMedia' + actionName);
           } else {
             if (mediaResult.mediaChunk) {
               // If the chunksequence number is less than equal to 0 implies EOF
@@ -207,7 +195,7 @@ export namespace media {
               if (mediaResult.mediaChunk.chunkSequence <= 0) {
                 const file = createFile(helper.assembleAttachment, helper.mediaMimeType);
                 callback(mediaResult.error, file);
-                delete GlobalVars.handlers['getMedia' + actionName];
+                removeHandler('getMedia' + actionName);
               } else {
                 // Keep pushing chunks into assemble attachment
                 const assemble: AssembleAttachment = decodeAttachment(mediaResult.mediaChunk, helper.mediaMimeType);
@@ -215,13 +203,13 @@ export namespace media {
               }
             } else {
               callback({ errorCode: ErrorCode.INTERNAL_ERROR, message: 'data receieved is null' }, null);
-              delete GlobalVars.handlers['getMedia' + actionName];
+              removeHandler('getMedia' + actionName);
             }
           }
         }
       }
 
-      GlobalVars.handlers['getMedia' + actionName] = handleGetMediaRequest;
+      registerHandler('getMedia' + actionName, handleGetMediaRequest);
     }
   }
 
@@ -240,9 +228,14 @@ export namespace media {
     maxMediaCount: number;
 
     /**
-     * Additional properties for customization of select media in mobile devices
+     * Additional properties for customization of select media - Image in mobile devices
      */
     imageProps?: ImageProps;
+
+    /**
+     * Additional properties for customization of select media - VideoAndImage in mobile devices
+     */
+    videoAndImageProps?: VideoAndImageProps;
 
     /**
      * Additional properties for audio capture flows.
@@ -251,11 +244,14 @@ export namespace media {
   }
 
   /**
-   *  All properties in ImageProps are optional and have default values in the platform
+   * @private
+   * Hide from docs
+   * --------
+   * All properties common to Image and Video Props
    */
-  export interface ImageProps {
+  interface MediaProps {
     /**
-     * Optional; Lets the developer specify the image source, more than one can be specified.
+     * Optional; Lets the developer specify the media source, more than one can be specified.
      * Default value is both camera and gallery
      */
     sources?: Source[];
@@ -267,16 +263,21 @@ export namespace media {
     startMode?: CameraStartMode;
 
     /**
-     * Optional; indicate if inking on the selected Image is allowed or not
-     * Default value is true
-     */
-    ink?: boolean;
-
-    /**
      * Optional; indicate if user is allowed to move between front and back camera
      * Default value is true
      */
     cameraSwitcher?: boolean;
+  }
+
+  /**
+   *  All properties in ImageProps are optional and have default values in the platform
+   */
+  export interface ImageProps extends MediaProps {
+    /**
+     * Optional; indicate if inking on the selected Image is allowed or not
+     * Default value is true
+     */
+    ink?: boolean;
 
     /**
      * Optional; indicate if putting text stickers on the selected Image is allowed or not
@@ -290,6 +291,25 @@ export namespace media {
      */
     enableFilter?: boolean;
   }
+
+  /**
+   * @private
+   * Hide from docs
+   * --------
+   * All properties in VideoProps are optional and have default values in the platform
+   */
+  interface VideoProps extends MediaProps {
+    /**
+     * Optional; the maximum duration in minutes after which the recording should terminate automatically.
+     * Default value is defined by the platform serving the API.
+     */
+    maxDuration?: number;
+  }
+
+  /**
+   * All properties in VideoAndImageProps are optional and have default values in the platform
+   */
+  export interface VideoAndImageProps extends ImageProps, VideoProps {}
 
   /**
    *  All properties in AudioProps are optional and have default values in the platform
@@ -326,7 +346,7 @@ export namespace media {
   export enum MediaType {
     Image = 1,
     // Video = 2, // Not implemented yet
-    // ImageOrVideo = 3, // Not implemented yet
+    VideoAndImage = 3,
     Audio = 4,
   }
 
@@ -404,12 +424,26 @@ export namespace media {
     if (!callback) {
       throw new Error('[select Media] Callback cannot be null');
     }
+
     ensureInitialized(FrameContexts.content, FrameContexts.task);
     if (!isAPISupportedByPlatform(mediaAPISupportVersion)) {
       const oldPlatformError: SdkError = { errorCode: ErrorCode.OLD_PLATFORM };
       callback(oldPlatformError, null);
       return;
     }
+
+    if (isMediaCallForVideoAndImageInputs(mediaInputs)) {
+      if (GlobalVars.hostClientType != HostClientType.android && GlobalVars.hostClientType != HostClientType.ios) {
+        const notSupportedError: SdkError = { errorCode: ErrorCode.NOT_SUPPORTED_ON_PLATFORM };
+        callback(notSupportedError, null);
+        return;
+      } else if (!isAPISupportedByPlatform(videoAndImageMediaAPISupportVersion)) {
+        const oldPlatformError: SdkError = { errorCode: ErrorCode.OLD_PLATFORM };
+        callback(oldPlatformError, null);
+        return;
+      }
+    }
+
     if (!validateSelectMediaInputs(mediaInputs)) {
       const invalidInput: SdkError = { errorCode: ErrorCode.INVALID_ARGUMENTS };
       callback(invalidInput, null);
@@ -417,10 +451,8 @@ export namespace media {
     }
 
     const params = [mediaInputs];
-    const messageId = sendMessageRequestToParent('selectMedia', params);
-
     // What comes back from native at attachments would just be objects and will be missing getMedia method on them.
-    GlobalVars.callbacks[messageId] = (err: SdkError, localAttachments: Media[]) => {
+    sendMessageToParent('selectMedia', params, (err: SdkError, localAttachments: Media[]) => {
       if (!localAttachments) {
         callback(err, null);
         return;
@@ -430,7 +462,7 @@ export namespace media {
         mediaArray.push(new Media(attachment));
       }
       callback(err, mediaArray);
-    };
+    });
   }
 
   /**
@@ -456,8 +488,7 @@ export namespace media {
     }
 
     const params = [uriList];
-    const messageId = sendMessageRequestToParent('viewImages', params);
-    GlobalVars.callbacks[messageId] = callback;
+    sendMessageToParent('viewImages', params, callback);
   }
 
   /**
@@ -487,7 +518,11 @@ export namespace media {
     if (
       GlobalVars.hostClientType === HostClientType.desktop ||
       GlobalVars.hostClientType === HostClientType.web ||
-      GlobalVars.hostClientType === HostClientType.rigel
+      GlobalVars.hostClientType === HostClientType.rigel ||
+      GlobalVars.hostClientType === HostClientType.teamsRoomsWindows ||
+      GlobalVars.hostClientType === HostClientType.teamsRoomsAndroid ||
+      GlobalVars.hostClientType === HostClientType.teamsPhones ||
+      GlobalVars.hostClientType === HostClientType.teamsDisplays
     ) {
       const notSupportedError: SdkError = { errorCode: ErrorCode.NOT_SUPPORTED_ON_PLATFORM };
       callback(notSupportedError, null);
@@ -506,7 +541,6 @@ export namespace media {
       return;
     }
 
-    const messageId = sendMessageRequestToParent('media.scanBarCode', [config]);
-    GlobalVars.callbacks[messageId] = callback;
+    sendMessageToParent('media.scanBarCode', [config], callback);
   }
 }

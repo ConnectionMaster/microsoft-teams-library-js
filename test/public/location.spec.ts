@@ -1,20 +1,25 @@
-import { ErrorCode, location, SdkError } from '../../src/public/index' 
+/* eslint-disable @typescript-eslint/no-object-literal-type-assertion */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+import { ErrorCode, location, SdkError } from '../../src/public/index';
 import { FramelessPostMocks } from '../framelessPostMocks';
 import { _initialize, _uninitialize } from '../../src/public/publicAPIs';
 import { DOMMessageEvent } from '../../src/internal/interfaces';
 import { Utils } from '../utils';
 import { FrameContexts } from '../../src/public/constants';
+import { locationAPIsRequiredVersion } from '../../src/internal/constants';
 
 /**
  * Test cases for location APIs
  */
 describe('location', () => {
   const mobilePlatformMock = new FramelessPostMocks();
-  const desktopPlatformMock = new Utils()
-  const minVersionForLocationAPIs = location.locationAPIsRequiredVersion;
-  const defaultLocationProps: location.LocationProps = {allowChooseLocation: false, showMap: false};
-  const defaultLocation: location.Location = {latitude: 17, longitude: 17, accuracy: -1, timestamp: 100};
-  
+  const desktopPlatformMock = new Utils();
+  const minVersionForLocationAPIs = locationAPIsRequiredVersion;
+  const defaultLocationProps: location.LocationProps = { allowChooseLocation: false, showMap: false };
+  const defaultLocation: location.Location = { latitude: 17, longitude: 17, accuracy: -1, timestamp: 100 };
+  const originalDefaultPlatformVersion = '1.6.0';
+
   beforeEach(() => {
     mobilePlatformMock.messages = [];
 
@@ -50,6 +55,7 @@ describe('location', () => {
   });
   it('getLocation call in default version of platform support fails', () => {
     mobilePlatformMock.initializeWithContext(FrameContexts.task);
+    mobilePlatformMock.setClientSupportedSDKVersion(originalDefaultPlatformVersion);
     let error;
     location.getLocation(defaultLocationProps, (e: SdkError, l: location.Location) => {
       error = e;
@@ -87,7 +93,7 @@ describe('location', () => {
     });
     expect(error).not.toBeNull();
     expect(error.errorCode).toBe(ErrorCode.INVALID_ARGUMENTS);
-  }); 
+  });
   it('should allow getLocation calls in desktop', () => {
     desktopPlatformMock.initializeWithContext(FrameContexts.content);
     desktopPlatformMock.setClientSupportedSDKVersion(minVersionForLocationAPIs);
@@ -133,9 +139,9 @@ describe('location', () => {
     mobilePlatformMock.respondToMessage({
       data: {
         id: callbackId,
-        args: [undefined, defaultLocation]
-      }
-    } as DOMMessageEvent)
+        args: [undefined, defaultLocation],
+      },
+    } as DOMMessageEvent);
 
     expect(error).toBeFalsy();
     expect(location).not.toBeNull();
@@ -162,9 +168,9 @@ describe('location', () => {
     mobilePlatformMock.respondToMessage({
       data: {
         id: callbackId,
-        args: [{errorCode: ErrorCode.PERMISSION_DENIED}]
-      }
-    } as DOMMessageEvent)
+        args: [{ errorCode: ErrorCode.PERMISSION_DENIED }],
+      },
+    } as DOMMessageEvent);
 
     expect(loc).toBeFalsy();
     expect(error.errorCode).toBe(ErrorCode.PERMISSION_DENIED);
@@ -189,6 +195,7 @@ describe('location', () => {
   });
   it('showLocation call in default version of platform support fails', () => {
     mobilePlatformMock.initializeWithContext(FrameContexts.task);
+    mobilePlatformMock.setClientSupportedSDKVersion(originalDefaultPlatformVersion);
     let error;
     location.showLocation(defaultLocation, (e: SdkError, v: boolean) => {
       error = e;
@@ -226,7 +233,7 @@ describe('location', () => {
     });
     expect(error).not.toBeNull();
     expect(error.errorCode).toBe(ErrorCode.INVALID_ARGUMENTS);
-  });   
+  });
   it('should allow showLocation calls in desktop', () => {
     desktopPlatformMock.initializeWithContext(FrameContexts.content);
     desktopPlatformMock.setClientSupportedSDKVersion(minVersionForLocationAPIs);
@@ -272,9 +279,9 @@ describe('location', () => {
     mobilePlatformMock.respondToMessage({
       data: {
         id: callbackId,
-        args: [undefined, true]
-      }
-    } as DOMMessageEvent)
+        args: [undefined, true],
+      },
+    } as DOMMessageEvent);
 
     expect(error).toBeFalsy();
     expect(value).toBe(true);
@@ -297,9 +304,9 @@ describe('location', () => {
     mobilePlatformMock.respondToMessage({
       data: {
         id: callbackId,
-        args: [{errorCode: ErrorCode.PERMISSION_DENIED}]
-      }
-    } as DOMMessageEvent)
+        args: [{ errorCode: ErrorCode.PERMISSION_DENIED }],
+      },
+    } as DOMMessageEvent);
 
     expect(value).toBeFalsy();
     expect(error.errorCode).toBe(ErrorCode.PERMISSION_DENIED);

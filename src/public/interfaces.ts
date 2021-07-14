@@ -158,6 +158,15 @@ export interface LocaleInfo {
   longTime: string;
 }
 
+/**
+ * Allowed user file open preferences
+ */
+export enum FileOpenPreference {
+  Inline = 'inline',
+  Desktop = 'desktop',
+  Web = 'web',
+}
+
 export interface Context {
   /**
    * The Office 365 group ID for the team with which the content is associated.
@@ -263,6 +272,16 @@ export interface Context {
   teamSitePath?: string;
 
   /**
+   * The tenant ID of the host team.
+   */
+  hostTeamTenantId?: string;
+
+  /**
+   * The AAD group ID of the host team.
+   */
+  hostTeamGroupId?: string;
+
+  /**
    * The relative path to the SharePoint folder associated with the channel.
    */
   channelRelativeUrl?: string;
@@ -315,7 +334,8 @@ export interface Context {
   isTeamArchived?: boolean;
 
   /**
-   * The type of the host client. Possible values are : android, ios, web, desktop, rigel
+   * The type of the host client. Possible values are : android, ios, web, desktop, rigel(deprecated, use teamsRoomsWindows instead),
+   * teamsRoomsWindows, teamsRoomsAndroid, teamsPhones, teamsDisplays
    */
   hostClientType?: HostClientType;
 
@@ -399,6 +419,11 @@ export interface Context {
    * Team Template ID if there was a Team Template associated with the creation of the team.
    */
   teamTemplateId?: string;
+
+  /**
+   * Where the user prefers the file to be opened from by default during file open
+   */
+  userFileOpenPreference?: FileOpenPreference;
 }
 
 export interface DeepLinkParameters {
@@ -578,6 +603,10 @@ export enum ErrorCode {
    * Internal error encountered while performing the required operation.
    */
   INTERNAL_ERROR = 500,
+  /**
+   * API is not supported in the current context
+   */
+  NOT_SUPPORTED_IN_CURRENT_CONTEXT = 501,
   /**
   Permissions denied by user
   */

@@ -1,3 +1,4 @@
+import { people } from '../public/people';
 import { media } from '../public/media';
 
 /**
@@ -56,6 +57,18 @@ export function validateSelectMediaInputs(mediaInputs: media.MediaInputs): boole
 }
 
 /**
+ * Returns true if the mediaInput params are called for mediatype VideoAndImage and false otherwise
+ */
+export function isMediaCallForVideoAndImageInputs(mediaInputs: media.MediaInputs): boolean {
+  if (mediaInputs) {
+    if (mediaInputs.mediaType == media.MediaType.VideoAndImage || mediaInputs.videoAndImageProps) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Returns true if the get Media params are valid and false otherwise
  */
 export function validateGetMediaInputs(mimeType: string, format: media.FileFormat, content: string): boolean {
@@ -86,6 +99,37 @@ export function validateScanBarCodeInput(barCodeConfig: media.BarCodeConfig): bo
       barCodeConfig.timeOutIntervalInSec > 60
     ) {
       return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Returns true if the people picker params are valid and false otherwise
+ */
+export function validatePeoplePickerInput(peoplePickerInputs: people.PeoplePickerInputs): boolean {
+  if (peoplePickerInputs) {
+    if (peoplePickerInputs.title) {
+      if (typeof peoplePickerInputs.title !== 'string') {
+        return false;
+      }
+    }
+
+    if (peoplePickerInputs.setSelected) {
+      if (typeof peoplePickerInputs.setSelected !== 'object') {
+        return false;
+      }
+    }
+
+    if (peoplePickerInputs.openOrgWideSearchInChatOrChannel) {
+      if (typeof peoplePickerInputs.openOrgWideSearchInChatOrChannel !== 'boolean') {
+        return false;
+      }
+    }
+    if (peoplePickerInputs.singleSelect) {
+      if (typeof peoplePickerInputs.singleSelect !== 'boolean') {
+        return false;
+      }
     }
   }
   return true;

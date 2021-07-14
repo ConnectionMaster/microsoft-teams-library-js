@@ -1,14 +1,24 @@
-import { ensureInitialized, sendMessageRequestToParent, sendMessageEventToChild } from '../internal/internalAPIs';
-import { GlobalVars } from '../internal/globalVars';
-import { FrameContexts } from '../public/constants';
+import { ensureInitialized, isAPISupportedByPlatform } from '../internal/internalAPIs';
+import { FrameContexts, HostClientType } from '../public/constants';
 import {
   ChatMembersInformation,
   ShowNotificationParameters,
   FilePreviewParameters,
   TeamInstanceParameters,
   UserJoinedTeamsInformation,
+  UserSettingTypes,
 } from './interfaces';
 import { getGenericOnCompleteHandler } from '../internal/utils';
+import { Communication, sendMessageToParent, sendMessageEventToChild } from '../internal/communication';
+import { menus } from './menus';
+import { registerHandler } from '../internal/handlers';
+import { GlobalVars } from '../internal/globalVars';
+import { ErrorCode, SdkError } from '../public/interfaces';
+import { getUserJoinedTeamsSupportedAndroidClientVersion } from '../internal/constants';
+
+export function initializePrivateApis(): void {
+  menus.initialize();
+}
 
 /**
  * @private
@@ -24,8 +34,18 @@ export function getUserJoinedTeams(
 ): void {
   ensureInitialized();
 
-  const messageId = sendMessageRequestToParent('getUserJoinedTeams', [teamInstanceParameters]);
-  GlobalVars.callbacks[messageId] = callback;
+  if (
+    (GlobalVars.hostClientType === HostClientType.android ||
+      GlobalVars.hostClientType === HostClientType.teamsRoomsAndroid ||
+      GlobalVars.hostClientType === HostClientType.teamsPhones ||
+      GlobalVars.hostClientType === HostClientType.teamsDisplays) &&
+    !isAPISupportedByPlatform(getUserJoinedTeamsSupportedAndroidClientVersion)
+  ) {
+    const oldPlatformError: SdkError = { errorCode: ErrorCode.OLD_PLATFORM };
+    throw new Error(JSON.stringify(oldPlatformError));
+  }
+
+  sendMessageToParent('getUserJoinedTeams', [teamInstanceParameters], callback);
 }
 
 /**
@@ -36,7 +56,7 @@ export function getUserJoinedTeams(
  */
 export function enterFullscreen(): void {
   ensureInitialized(FrameContexts.content);
-  sendMessageRequestToParent('enterFullscreen', []);
+  sendMessageToParent('enterFullscreen', []);
 }
 
 /**
@@ -47,7 +67,7 @@ export function enterFullscreen(): void {
  */
 export function exitFullscreen(): void {
   ensureInitialized(FrameContexts.content);
-  sendMessageRequestToParent('exitFullscreen', []);
+  sendMessageToParent('exitFullscreen', []);
 }
 
 /**
@@ -73,9 +93,10 @@ export function openFilePreview(filePreviewParameters: FilePreviewParameters): v
     filePreviewParameters.editFile,
     filePreviewParameters.subEntityId,
     filePreviewParameters.viewerAction,
+    filePreviewParameters.fileOpenPreference,
   ];
 
-  sendMessageRequestToParent('openFilePreview', params);
+  sendMessageToParent('openFilePreview', params);
 }
 
 /**
@@ -89,7 +110,7 @@ export function openFilePreview(filePreviewParameters: FilePreviewParameters): v
 export function showNotification(showNotificationParameters: ShowNotificationParameters): void {
   ensureInitialized(FrameContexts.content);
   const params = [showNotificationParameters.message, showNotificationParameters.notificationType];
-  sendMessageRequestToParent('showNotification', params);
+  sendMessageToParent('showNotification', params);
 }
 
 /**
@@ -102,8 +123,7 @@ export function showNotification(showNotificationParameters: ShowNotificationPar
 export function uploadCustomApp(manifestBlob: Blob, onComplete?: (status: boolean, reason?: string) => void): void {
   ensureInitialized();
 
-  const messageId = sendMessageRequestToParent('uploadCustomApp', [manifestBlob]);
-  GlobalVars.callbacks[messageId] = onComplete ? onComplete : getGenericOnCompleteHandler();
+  sendMessageToParent('uploadCustomApp', [manifestBlob], onComplete ? onComplete : getGenericOnCompleteHandler());
 }
 
 /**
@@ -121,16 +141,10 @@ export function sendCustomMessage(
   args?: any[],
   // tslint:disable-next-line:no-any
   callback?: (...args: any[]) => void,
-): number {
+): void {
   ensureInitialized();
 
-  const messageId = sendMessageRequestToParent(actionName, args);
-  if (typeof callback === 'function') {
-    GlobalVars.callbacks[messageId] = (...args: any[]): void => {
-      callback.apply(null, args);
-    };
-  }
-  return messageId;
+  sendMessageToParent(actionName, args, callback);
 }
 
 /**
@@ -150,7 +164,7 @@ export function sendCustomEvent(
   ensureInitialized();
 
   //validate childWindow
-  if (!GlobalVars.childWindow) {
+  if (!Communication.childWindow) {
     throw new Error('The child window has not yet been initialized or is not present');
   }
   sendMessageEventToChild(actionName, args);
@@ -171,9 +185,9 @@ export function registerCustomHandler(
   ) => any[],
 ): void {
   ensureInitialized();
-  GlobalVars.handlers[actionName] = (...args: any[]) => {
+  registerHandler(actionName, (...args: any[]) => {
     return customHandler.apply(this, args);
-  };
+  });
 }
 
 /**
@@ -188,8 +202,7 @@ export function registerCustomHandler(
 export function getChatMembers(callback: (chatMembersInformation: ChatMembersInformation) => void): void {
   ensureInitialized();
 
-  const messageId = sendMessageRequestToParent('getChatMembers');
-  GlobalVars.callbacks[messageId] = callback;
+  sendMessageToParent('getChatMembers', callback);
 }
 
 /**
@@ -203,6 +216,20 @@ export function getChatMembers(callback: (chatMembersInformation: ChatMembersInf
 export function getConfigSetting(callback: (value: string) => void, key: string): void {
   ensureInitialized();
 
-  const messageId = sendMessageRequestToParent('getConfigSetting', [key]);
-  GlobalVars.callbacks[messageId] = callback;
+  sendMessageToParent('getConfigSetting', [key], callback);
+}
+
+/**
+ * @private
+ * register a handler to be called when a user setting changes. The changed setting type & value is provided in the callback.
+ * @param settingTypes List of user setting changes to subscribe
+ * @param handler When a subscribed setting is updated this handler is called
+ */
+export function registerUserSettingsChangeHandler(
+  settingTypes: UserSettingTypes[],
+  handler: (settingType: UserSettingTypes, value: any) => void,
+): void {
+  ensureInitialized();
+
+  registerHandler('userSettingsChange', handler, true, [settingTypes]);
 }
